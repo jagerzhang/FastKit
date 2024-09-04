@@ -1,0 +1,4 @@
+include requirements.txt
+recursive-exclude fastkit *.pyc
+recursive-exclude fastkit *_pycache_*
+recursive-include fastkit */logs/*

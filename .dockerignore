@@ -1,0 +1,6 @@
+.temp
+env_ext.sh
+logs/*
+*.log*
+*.pyc
+*_pycache_*

@@ -1,0 +1,11 @@
+# ====== common ===========
+arrow==1.2.3
+redis==3.5.3
+kafka-python==2.0.2
+pymysql>=0.10.0,<=1.1.0
+dataset==1.6.2
+apscheduler==3.10.4
+httpx>=0.22.0,<=0.27.0
+tenacity>=8.2.2,<=8.2.3
+pyyaml>=6.0.1
+cacheout>=0.14.0
