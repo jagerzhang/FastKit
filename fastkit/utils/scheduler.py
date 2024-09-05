@@ -39,7 +39,7 @@ def get_scheduler(name: str = "default",
                 timezone=timezone, logger=logger)
         elif scheduler_type == "asyncio":
             SCHEDULERS[scheduler_type][name] = AsyncIOScheduler(
-                timezone=timezone logger=logger)
+                timezone=timezone, logger=logger)
         else:
             raise ValueError("Unsupported scheduler type")
 
