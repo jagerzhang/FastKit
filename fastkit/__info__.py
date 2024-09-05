@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # SDK info
-__version__ = '0.1.8'
+__version__ = '0.1.9'
 __package_name__ = "fastkit"
 __title__ = 'FastKit — Python 开发工具包'
 

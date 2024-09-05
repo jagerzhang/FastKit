@@ -32,7 +32,7 @@ def get_scheduler(name: str = "default",
         SCHEDULERS[scheduler_type] = {}
 
     if name not in SCHEDULERS.get(scheduler_type, {}):
-        timezone = timezone or getenv.get("TZ", "Asia/Shanghai")
+        timezone = timezone or getenv("TZ", "Asia/Shanghai")
         logger = logger or get_logger(logger_name="console")
         if scheduler_type == "background":
             SCHEDULERS[scheduler_type][name] = BackgroundScheduler(
