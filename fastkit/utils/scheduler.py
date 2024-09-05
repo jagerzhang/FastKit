@@ -11,8 +11,21 @@ def get_scheduler(name: str = "default",
                   logger: object = None,
                   auto_start: bool = True,
                   timezone: str = None) -> BackgroundScheduler:
-    """获取任务调度器
-    注：同名调度器将被复用
+    """
+    生成APS任务调度实例
+
+    Args:
+        name (str, optional): 调度器名称. Defaults to "default".
+        scheduler_type (str, optional): 调度器类型，默认 background 对应 BackgroundScheduler，asyncio 对应 AsyncIOScheduler.
+        logger (object, optional): 自定义日志. Defaults to None.
+        auto_start (bool, optional): 是否自动启动. Defaults to True.
+        timezone (str, optional): 指定时区，默认未系统环境变量TZ，若未设置为为 Shanghai，. Defaults to None.
+
+    Raises:
+        ValueError: 类型错误
+
+    Returns:
+        BackgroundScheduler: Aps实例对象
     """
     global SCHEDULERS
     if scheduler_type not in SCHEDULERS:
