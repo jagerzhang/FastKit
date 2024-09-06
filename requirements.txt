@@ -9,3 +9,4 @@ httpx>=0.22.0,<=0.27.0
 tenacity>=8.2.2,<=8.2.3
 pyyaml>=6.0.1
 cacheout>=0.14.0
+redlock>=1.2.0
