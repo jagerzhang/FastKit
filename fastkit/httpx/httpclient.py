@@ -8,11 +8,13 @@ from httpx import (Client as HttpxClient, AsyncClient as HttpxAsyncClient,
 from tenacity import (retry, RetryError, stop_any, stop_after_delay,
                       stop_after_attempt, wait_exponential, retry_if_result,
                       retry_if_exception_type, retry_any)
-from fastkit.logging import logger
+from fastkit.logging import get_logger
 from fastkit.__info__ import __version__ as fastkit_version
 from .status import (HTTP_200_OK, HTTP_600_THIRD_PARTY_ERROR,
                      HTTP_605_THIRD_PARTY_NEWORK_ERROR,
                      HTTP_606_THIRD_PARTY_RETRY_ERROR)
+
+logger = get_logger("console")
 
 
 def default_retry_by_result(response: Response) -> bool:
@@ -48,8 +50,7 @@ def get_default_client_config():
         "verify": False,
         "headers": {
             "user-agent":
-            f"FastKit-{fastkit_version}/Httpx-Client-{httpx_version}",
-            "x-request-id": str(uuid4()),
+            f"FastKit-{fastkit_version}/Httpx-Client-{httpx_version}"
         },
         "timeout": 60
     }
@@ -100,9 +101,13 @@ class Client(HttpxClient):
     HTTP 请求增强方法
     """
 
-    def __init__(self, report_log: bool = True, **kwargs) -> HttpxClient:
+    def __init__(self,
+                 report_log: bool = True,
+                 logger=None,
+                 **kwargs) -> HttpxClient:
         """
         report_log: 是否上报或打印日志
+        logger: 日志对象
         retry_config 支持 tenacity 重试参数，说明如下：
         tenacity 库提供了非常丰富的重试（retry）配置选项，下面将列出 retry 装饰器中所有可选参数并进行简要说明：
             stop: 定义应何时停止重试的策略。可以使用内置的 stop_* 函数，也可以使用自定义的 callable 对象。例如，使用
@@ -134,6 +139,7 @@ class Client(HttpxClient):
             retry_error_cls: 指定应当被 classified（分类）字符串的想弄死。当在 retry 中间产生一个重试错误时，
             应当将它识别为这些字符串之一。
         """
+        self.logger = logger or get_logger("console")
         # HTTPx 参数自适应
         client_kwargs = {
             key: value
@@ -142,6 +148,7 @@ class Client(HttpxClient):
         }
         client_config = get_default_client_config()
         client_config.update(client_kwargs)
+
         self.client = HttpxClient(**client_config)
         self.headers = self.client.headers
 
@@ -289,19 +296,22 @@ class Client(HttpxClient):
             return self.client.request(method.upper(), *args, **kwargs)
 
         request_start = time.perf_counter()
-        body = kwargs.get("json") or kwargs.get("params") or kwargs.get(
-            "data", "")
-        out_body = json.dumps(body) if isinstance(body, dict) else str(body)
-
+        json_body = json.dumps(kwargs.get("json", {}))
+        data = str(kwargs.get("data") or "")
+        params = json.dumps(kwargs.get("params", {}))
         headers = {**self.headers, **kwargs.get("headers", {})}
         kwargs["headers"] = headers
+        # 默认植入x-request-id
+        kwargs["headers"].setdefault("x-request-id", str(uuid4()))
 
         req_log = {
             "direction": "out",
             "logId": headers.get("x-request-id", str(uuid4())),
             "response": {},
             "request": {
-                "body": out_body[0:4096],
+                "json": json_body[0:4096],
+                "data": data[0:4096],
+                "params": params[0:4096],
                 "url": url,
                 "method": method,
                 "headers": json.dumps(headers)
@@ -342,7 +352,7 @@ class Client(HttpxClient):
                 response.close()
 
         if self.report_log:
-            logger.info(json.dumps(req_log))
+            self.logger.info(json.dumps(req_log))
 
         return response
 
@@ -352,8 +362,10 @@ class AsyncClient(HttpxAsyncClient):
     HTTP 请求增强方法
     """
 
-    def __init__(self, report_log: bool = True, **kwargs):
+    def __init__(self, report_log: bool = True, logger=None, **kwargs):
         """
+        report_log: 是否上报日志
+        logger: 日志对象
         retry_config 支持 tenacity 重试参数，说明如下：
         tenacity 库提供了非常丰富的重试（retry）配置选项，下面将列出 retry 装饰器中所有可选参数并进行简要说明：
             stop: 定义应何时停止重试的策略。可以使用内置的 stop_* 函数，也可以使用自定义的 callable 对象。例如，使用
@@ -385,6 +397,7 @@ class AsyncClient(HttpxAsyncClient):
             retry_error_cls: 指定应当被 classified（分类）字符串的想弄死。当在 retry 中间产生一个重试错误时，
             应当将它识别为这些字符串之一。
         """
+        self.logger = logger or get_logger("console")
         # HTTPx 参数自适应
         client_kwargs = {
             key: value
@@ -548,19 +561,22 @@ class AsyncClient(HttpxAsyncClient):
             return await self.client.request(method.upper(), *args, **kwargs)
 
         request_start = time.perf_counter()
-        body = kwargs.get("json") or kwargs.get("params") or kwargs.get(
-            "data", "")
-        out_body = json.dumps(body) if isinstance(body, dict) else str(body)
-
+        json_body = json.dumps(kwargs.get("json", {}))
+        data = str(kwargs.get("data") or "")
+        params = json.dumps(kwargs.get("params", {}))
         headers = {**self.headers, **kwargs.get("headers", {})}
         kwargs["headers"] = headers
+        # 默认植入x-request-id
+        kwargs["headers"].setdefault("x-request-id", str(uuid4()))
 
         req_log = {
             "direction": "out",
             "logId": headers.get("x-request-id", str(uuid4())),
             "response": {},
             "request": {
-                "body": out_body[0:4096],
+                "json": json_body[0:4096],
+                "data": data[0:4096],
+                "params": params[0:4096],
                 "url": url,
                 "method": method,
                 "headers": json.dumps(headers)
@@ -600,7 +616,7 @@ class AsyncClient(HttpxAsyncClient):
             req_log["latency"] = int((request_end - request_start) * 1000)
 
         if self.report_log:
-            logger.info(json.dumps(req_log))
+            self.logger.info(json.dumps(req_log))
 
         return response
 

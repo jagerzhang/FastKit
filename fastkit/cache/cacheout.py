@@ -1,4 +1,57 @@
+from functools import wraps
 from cacheout import Cache, FIFOCache, LIFOCache, LRUCache, MRUCache, LFUCache, RRCache
+
+from fastkit.utils.common import get_md5
+
+
+def generate_cache_key(func, *args, **kwargs):
+    """
+    生成唯一的缓存键，基于函数名称和参数。
+
+    :param func: 被装饰的函数
+    :param args: 位置参数
+    :param kwargs: 关键字参数
+    :return: 生成的缓存键
+    """
+    # 将函数名称、位置参数和关键字参数组合成一个字符串
+    key = f"{func.__module__}.{func.__name__}:{args}:{kwargs}"
+    return f"{func.__module__}.{func.__name__}:{get_md5(key)}"
+
+
+def cache_result_decorator(cache_instance):
+    """
+    装饰器，用于缓存函数的返回结果。
+
+    :param cache_instance: 缓存实例
+    """
+
+    def decorator(ttl: int = 120):
+
+        def wrapper(func):
+
+            @wraps(func)
+            def inner(*args, **kwargs):
+                cache_key = generate_cache_key(func, *args, **kwargs)
+                # 检查缓存
+                cached_result = cache_instance.get(cache_key)
+                if cached_result is not None:
+                    return cached_result
+
+                # 调用原函数
+                result = func(*args, **kwargs)
+
+                # 将结果存入缓存
+                if result is not None:
+                    cache_instance.set(cache_key, result, ttl)
+
+                return result
+
+            return inner
+
+        return wrapper
+
+    return decorator
+
 
 CACHE_INSTS = {}
 
@@ -41,8 +94,9 @@ def get_cacheout_pool(cache_name: str = "default",
                 "Invalid cache type. Supported types: 'cache', 'fifo', 'lifo', 'lru', 'mru', 'lfu', 'rr'."
             )
 
-        CACHE_INSTS[full_cache_name] = cache_class(maxsize=maxsize,
-                                                   ttl=ttl,
-                                                   **kwargs)
+        cache_instance = cache_class(maxsize=maxsize, ttl=ttl, **kwargs)
+        # 将装饰器注入到缓存实例中
+        cache_instance.cache_result = cache_result_decorator(cache_instance)
+        CACHE_INSTS[full_cache_name] = cache_instance
 
     return CACHE_INSTS[full_cache_name]
