@@ -1,6 +1,6 @@
 """定时调度器
 """
-from asyncio import iscoroutinefunction
+from inspect import iscoroutinefunction
 from os import getenv
 
 from concurrent.futures import ThreadPoolExecutor as _ThreadPoolExecutor, wait as wait_task
