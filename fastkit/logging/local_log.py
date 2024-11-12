@@ -8,9 +8,7 @@ import logging
 from logging import Logger, StreamHandler, FileHandler, Formatter, warning
 
 # 本地默认日志格式
-LOG_FORMAT = ("%(color)s%(asctime)s.%(msecs)03d | %(levelname)s | "
-              "%(module)s:%(lineno)d %(end_color)s| %(message)s")
-
+LOG_FORMAT = "%(asctime)s.%(msecs)03d | %(levelname)s | %(module)s:%(lineno)d | %(message)s"
 LOCAL_LOGGER_INST = {}
 
 
