@@ -63,15 +63,17 @@ CACHE_TYPES = {
     "lru": LRUCache,
     "mru": MRUCache,
     "lfu": LFUCache,
-    "rr": RRCache
+    "rr": RRCache,
 }
 
 
-def get_cacheout_pool(cache_name: str = "default",
-                      cache_type: str = "cache",
-                      maxsize: int = 256,
-                      ttl: int = 0,
-                      **kwargs) -> Cache:
+def get_cacheout_pool(
+    cache_name: str = "default",
+    cache_type: str = "cache",
+    maxsize: int = 256,
+    ttl: int = 0,
+    **kwargs,
+) -> Cache:
     """
     初始化本地内存缓存
 
@@ -90,9 +92,7 @@ def get_cacheout_pool(cache_name: str = "default",
     if full_cache_name not in CACHE_INSTS:
         cache_class = CACHE_TYPES.get(cache_type)
         if cache_class is None:
-            raise ValueError(
-                "Invalid cache type. Supported types: 'cache', 'fifo', 'lifo', 'lru', 'mru', 'lfu', 'rr'."
-            )
+            raise ValueError("Invalid cache type. Supported types: 'cache', 'fifo', 'lifo', 'lru', 'mru', 'lfu', 'rr'.")
 
         cache_instance = cache_class(maxsize=maxsize, ttl=ttl, **kwargs)
         # 将装饰器注入到缓存实例中

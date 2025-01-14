@@ -1,12 +1,17 @@
 """线程池管理
 """
+
 import time
-from queue import Queue, Empty
+import traceback
+from concurrent.futures import ThreadPoolExecutor as _ThreadPoolExecutor
+from concurrent.futures import wait as wait_task
+from queue import Empty, Queue
 from threading import Event
-from concurrent.futures import ThreadPoolExecutor as _ThreadPoolExecutor, wait as wait_task
-from fastkit.logging import get_logger
+
 from fastkit.cache import get_redis_pool
-from .base import get_func_id, InterruptibleSleep
+from fastkit.logging import get_logger
+
+from .base import InterruptibleSleep, get_func_id
 
 
 class ThreadPoolExecutor:
@@ -21,8 +26,7 @@ class ThreadPoolExecutor:
         """
         self.task_queue = Queue()  # 任务队列
         self.logger = get_logger(logger_name="console")
-        self.redis_client = get_redis_pool(
-            **redis_config) if redis_config else None
+        self.redis_client = get_redis_pool(**redis_config) if redis_config else None
         self.stop_event = Event()  # 用于控制任务停止
         self.lock_timeout = 10  # 锁的超时时间
         self.executor = _ThreadPoolExecutor(max_workers=max_workers)
@@ -53,7 +57,7 @@ class ThreadPoolExecutor:
 
         Args:
             func (callable): 要执行的函数。
-            single_job (bool): 是否使用 Redis 锁。
+            single_job (bool): 是否是单任务（使用 Redis 分布式锁）。
             *args: 传递给函数的位置参数。
             **kwargs: 传递给函数的关键字参数。
         """
@@ -67,29 +71,22 @@ class ThreadPoolExecutor:
         while not self.stop_event.is_set():
             try:
                 func, single_job, args, kwargs = self.task_queue.get(timeout=1)
-                lock_key = get_func_id(func,
-                                       "thread-task",
-                                       args=args,
-                                       kwargs=kwargs)
+                lock_key = get_func_id(func, "thread-task", args=args, kwargs=kwargs)
 
                 get_lock = None
                 lock = None
                 if self.redis_client and single_job:
-                    lock = self.redis_client.lock(lock_key,
-                                                  timeout=self.lock_timeout)
+                    lock = self.redis_client.lock(lock_key, timeout=self.lock_timeout)
                     try:
                         get_lock = lock.acquire(blocking=True)
-                    except Exception as e:  # pylint: disable=broad-except
-                        self.logger.error(f"获取锁失败: {e}")
+                    except Exception:  # pylint: disable=broad-except
+                        self.logger.error(f"获取锁失败: {traceback.format_exc()}")
 
                 if get_lock or not self.redis_client or not single_job:
-                    future = self.executor.submit(self._execute_task, func,
-                                                  args, kwargs,
-                                                  lock if get_lock else None)
+                    future = self.executor.submit(self._execute_task, func, args, kwargs, lock if get_lock else None)
                     self.futures.append(future)
                 else:
-                    self.task_queue.put(
-                        (func, single_job, args, kwargs))  # 重新放回队列
+                    self.task_queue.put((func, single_job, args, kwargs))  # 重新放回队列
                     if lock:
                         lock.timeout = self.lock_timeout  # 重新设置锁的超时时间
 
@@ -109,17 +106,16 @@ class ThreadPoolExecutor:
             lock: Redis 锁对象。
         """
         try:
-            lock_key = get_func_id(func,
-                                   "thread-task",
-                                   args=args,
-                                   kwargs=kwargs)
-            future = self.executor.submit(self._heartbeat, lock_key)
-            self.futures.append(future)
+            # 如果配置了redis，则加上心跳刷新
+            if self.redis_client:
+                lock_key = get_func_id(func, "thread-task", args=args, kwargs=kwargs)
+                future = self.executor.submit(self._heartbeat, lock_key)
+                self.futures.append(future)
 
             result = func(*args, **kwargs)
             self.logger.info(f"任务 {func.__name__} 执行成功，返回: {result}")
-        except Exception as e:  # pylint: disable=broad-except
-            self.logger.error(f"任务 {func.__name__} 执行失败: {e}")
+        except Exception:  # pylint: disable=broad-except
+            self.logger.error(f"任务 {func.__name__} 执行失败: {traceback.format_exc()}")
         finally:
             if lock:
                 lock.release()
@@ -137,15 +133,11 @@ class ThreadPoolExecutor:
             try:
                 if self.redis_client.get(lock_key):
                     self.redis_client.expire(lock_key, time=self.lock_timeout)
-            except Exception as e:  # pylint: disable=broad-except
-                self.logger.warning(f"心跳线程刷新锁失败: {e}")
+            except Exception:  # pylint: disable=broad-except
+                self.logger.warning(f"心跳线程刷新锁失败: {traceback.format_exc()}")
                 break
 
-    def shutdown(self,
-                 wait: bool = True,
-                 timeout: int = 20,
-                 show_log: bool = True,
-                 on_timeout: callable = None):
+    def shutdown(self, wait: bool = True, timeout: int = 20, show_log: bool = True, on_timeout: callable = None):
         """优雅地关闭线程池，等待所有任务完成，支持超时。
 
         Args:
@@ -168,8 +160,7 @@ class ThreadPoolExecutor:
                     self.logger.info("所有线程池任务已完成。")
             except TimeoutError:
                 if show_log:
-                    self.logger.warning(
-                        f"线程池关闭超时，经过 {timeout} 秒后仍有任务在运行，强制关闭中。")
+                    self.logger.warning(f"线程池关闭超时，经过 {timeout} 秒后仍有任务在运行，强制关闭中。")
                 if callable(on_timeout):
                     on_timeout()  # 调用用户提供的回调函数
 

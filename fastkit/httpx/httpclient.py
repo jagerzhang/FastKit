@@ -1,18 +1,38 @@
 import time
 import json
+from os import getenv
 from inspect import signature
 from uuid import uuid4
-from httpx import (Client as HttpxClient, AsyncClient as HttpxAsyncClient,
-                   Response, __version__ as httpx_version, ConnectError,
-                   ReadError, WriteError, NetworkError)
-from tenacity import (retry, RetryError, stop_any, stop_after_delay,
-                      stop_after_attempt, wait_exponential, retry_if_result,
-                      retry_if_exception_type, retry_any)
+from httpx import (
+    Client as HttpxClient,
+    AsyncClient as HttpxAsyncClient,
+    Response,
+    __version__ as httpx_version,
+    ConnectError,
+    ReadError,
+    WriteError,
+    NetworkError,
+)
+from tenacity import (
+    retry,
+    RetryError,
+    stop_any,
+    stop_after_delay,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_result,
+    retry_if_exception_type,
+    retry_any,
+)
+
 from fastkit.logging import get_logger
 from fastkit.__info__ import __version__ as fastkit_version
-from .status import (HTTP_200_OK, HTTP_600_THIRD_PARTY_ERROR,
-                     HTTP_605_THIRD_PARTY_NEWORK_ERROR,
-                     HTTP_606_THIRD_PARTY_RETRY_ERROR)
+from .status import (
+    HTTP_200_OK,
+    HTTP_600_THIRD_PARTY_ERROR,
+    HTTP_605_THIRD_PARTY_NEWORK_ERROR,
+    HTTP_606_THIRD_PARTY_RETRY_ERROR,
+)
 
 logger = get_logger("console")
 
@@ -31,9 +51,10 @@ def default_retry_by_result(response: Response) -> bool:
         return True
 
     if response.status_code in [429, 500, 502, 503, 504]:
-        logger.warning(f"请求异常，状态码：{response.status_code}, \
+        logger.warning(
+            f"请求异常，状态码：{response.status_code}, \
 日志ID： {response.headers.get('x-request-id', 'null')}，响应内容：{response.text}, 开始重试..."
-                       )
+        )
         return True
 
     return False
@@ -48,17 +69,13 @@ def get_default_client_config():
     return {
         "follow_redirects": True,
         "verify": False,
-        "headers": {
-            "user-agent":
-            f"FastKit-{fastkit_version}/Httpx-Client-{httpx_version}"
-        },
-        "timeout": 60
+        "headers": {"user-agent": f"FastKit-{fastkit_version}/httpx-{httpx_version}"},
+        "timeout": 60,
     }
 
 
 def get_retry_config(**kwargs):
-    """初始化重试配置
-    """
+    """初始化重试配置"""
     # 最大重试耗时为60s
     stop_max_delay = int(kwargs.get("stop_max_delay", 60))
     # 最多重试3次
@@ -68,30 +85,22 @@ def get_retry_config(**kwargs):
     # 重试间隔时间的最大值为10s
     wait_max = int(kwargs.get("wait_exponential_max", 10))
     retry_by_result = kwargs.get("retry_by_result", default_retry_by_result)
-    retry_by_except = kwargs.get(
-        "retry_by_except", (ConnectError, ReadError, WriteError, NetworkError))
+    retry_by_except = kwargs.get("retry_by_except", (ConnectError, ReadError, WriteError, NetworkError))
 
     # 默认重试机制
     retry_config = {
-        "wait":
-        wait_exponential(multiplier=wait_multiplier, max=wait_max),
-        "stop":
-        stop_any(
+        "wait": wait_exponential(multiplier=wait_multiplier, max=wait_max),
+        "stop": stop_any(
             (stop_after_delay(stop_max_delay)),
             stop_after_attempt(stop_max_attempt_number),
         ),
-        "retry":
-        retry_any(
+        "retry": retry_any(
             retry_if_result(retry_by_result),
             retry_if_exception_type(retry_by_except),
-        )
+        ),
     }
     # 重试 参数自适应
-    retry_kwargs = {
-        key: value
-        for key, value in kwargs.items()
-        if key in signature(retry).parameters.keys()
-    }
+    retry_kwargs = {key: value for key, value in kwargs.items() if key in signature(retry).parameters.keys()}
     retry_config.update(retry_kwargs)
     return retry_config
 
@@ -101,13 +110,18 @@ class Client(HttpxClient):
     HTTP 请求增强方法
     """
 
-    def __init__(self,
-                 report_log: bool = True,
-                 logger=None,
-                 **kwargs) -> HttpxClient:
+    def __init__(
+        self,
+        report_log: bool = True,
+        logger=None,
+        max_body_log_length: int = 4096,
+        max_params_log_length: int = 2048,
+        max_headers_log_length: int = 2048,
+        **kwargs,
+    ) -> HttpxClient:
         """
-        report_log: 是否上报或打印日志
-        logger: 日志对象
+        report_log: 是否上报或打印日志，受环境不变量 flyer_request_log 总开关限制，比如 flyer_request_log=0，则这里也不会打印日志
+        logger: 传入日志句柄，如果不传入则使用默认的日志句柄
         retry_config 支持 tenacity 重试参数，说明如下：
         tenacity 库提供了非常丰富的重试（retry）配置选项，下面将列出 retry 装饰器中所有可选参数并进行简要说明：
             stop: 定义应何时停止重试的策略。可以使用内置的 stop_* 函数，也可以使用自定义的 callable 对象。例如，使用
@@ -142,9 +156,7 @@ class Client(HttpxClient):
         self.logger = logger or get_logger("console")
         # HTTPx 参数自适应
         client_kwargs = {
-            key: value
-            for key, value in kwargs.items()
-            if key in signature(HttpxClient.__init__).parameters.keys()
+            key: value for key, value in kwargs.items() if key in signature(HttpxClient.__init__).parameters.keys()
         }
         client_config = get_default_client_config()
         client_config.update(client_kwargs)
@@ -153,13 +165,18 @@ class Client(HttpxClient):
         self.headers = self.client.headers
 
         # 重试 参数自适应
-        retry_kwargs = {
-            key: value
-            for key, value in kwargs.items()
-            if key in signature(retry).parameters.keys()
-        }
+        retry_kwargs = {key: value for key, value in kwargs.items() if key in signature(retry).parameters.keys()}
         self.retry_config = get_retry_config(**retry_kwargs)
+
+        # 对外请求日志的总开关，关闭后，设置report_log=False 也不会打印日志
         self.report_log = report_log
+        flyer_request_log = int(getenv("flyer_request_log", "1"))
+        if flyer_request_log == 0:
+            self.report_log = False
+
+        self.max_body_log_length = max_body_log_length
+        self.max_params_log_length = max_params_log_length
+        self.max_headers_log_length = max_headers_log_length
 
     def get(self, url, params=None, **kwargs) -> Response:
         """
@@ -296,28 +313,10 @@ class Client(HttpxClient):
             return self.client.request(method.upper(), *args, **kwargs)
 
         request_start = time.perf_counter()
-        json_body = json.dumps(kwargs.get("json", {}))
-        data = str(kwargs.get("data") or "")
-        params = json.dumps(kwargs.get("params", {}))
         headers = {**self.headers, **kwargs.get("headers", {})}
         kwargs["headers"] = headers
         # 默认植入x-request-id
         kwargs["headers"].setdefault("x-request-id", str(uuid4()))
-
-        req_log = {
-            "direction": "out",
-            "logId": headers.get("x-request-id", str(uuid4())),
-            "response": {},
-            "request": {
-                "json": json_body[0:4096],
-                "data": data[0:4096],
-                "params": params[0:4096],
-                "url": url,
-                "method": method,
-                "headers": json.dumps(headers)
-            }
-        }
-
         response = Response(status_code=HTTP_200_OK)
         response._content = {}
 
@@ -337,22 +336,43 @@ class Client(HttpxClient):
             response.status_code = HTTP_600_THIRD_PARTY_ERROR
 
         finally:
-            req_log["response"]["status_code"] = response.status_code
-            req_log["response"]["headers"] = json.dumps(
-                dict(response.headers.items()))
+            if response:
+                response.close()
+
+        # 记录日志
+        if self.report_log:
+            req_body = kwargs.get("data", kwargs.get("json", "{}")) or ""
+            if isinstance(req_body, dict):
+                req_body = json.dumps(req_body, ensure_ascii=False)
+
+            req_log = {
+                "direction": "out",
+                "logId": headers.get("x-request-id", str(uuid4())),
+                "response": {},
+                "request": {
+                    "body": req_body[: self.max_body_log_length],
+                    "params": json.dumps(kwargs.get("params") or {}, ensure_ascii=False)[: self.max_params_log_length],
+                    "url": url,
+                    "method": method.upper(),
+                    "headers": json.dumps(headers, ensure_ascii=False)[: self.max_headers_log_length],
+                },
+            }
+            req_log["response"]["status"] = response.status_code
+            req_log["response"]["headers"] = json.dumps(dict(response.headers.items()), ensure_ascii=False)[
+                : self.max_headers_log_length
+            ]
             # 图片类型忽略内容记录
             content_type = response.headers.get("Content-Type", "")
             if not content_type.startswith("image") and content_type:
-                req_log["response"]["body"] = response.text[0:4096]
+                req_log["response"]["body"] = response.text[: self.max_body_log_length]
 
             request_end = time.perf_counter()
             req_log["latency"] = int((request_end - request_start) * 1000)
 
-            if response:
-                response.close()
-
-        if self.report_log:
-            self.logger.info(json.dumps(req_log))
+            if response.status_code >= 400:
+                self.logger.warning(json.dumps(req_log, ensure_ascii=False))
+            else:
+                self.logger.info(json.dumps(req_log, ensure_ascii=False))
 
         return response
 
@@ -362,10 +382,18 @@ class AsyncClient(HttpxAsyncClient):
     HTTP 请求增强方法
     """
 
-    def __init__(self, report_log: bool = True, logger=None, **kwargs):
+    def __init__(
+        self,
+        report_log: bool = True,
+        logger=None,
+        max_body_log_length: int = 4096,
+        max_params_log_length: int = 2048,
+        max_headers_log_length: int = 2048,
+        **kwargs,
+    ):
         """
-        report_log: 是否上报日志
-        logger: 日志对象
+        report_log: 是否上报或打印日志，受环境不变量 flyer_request_log 总开关限制，比如 flyer_request_log=0，则这里也不会打印日志
+        logger: 传入日志句柄，如果不传入则使用默认的日志句柄
         retry_config 支持 tenacity 重试参数，说明如下：
         tenacity 库提供了非常丰富的重试（retry）配置选项，下面将列出 retry 装饰器中所有可选参数并进行简要说明：
             stop: 定义应何时停止重试的策略。可以使用内置的 stop_* 函数，也可以使用自定义的 callable 对象。例如，使用
@@ -400,9 +428,7 @@ class AsyncClient(HttpxAsyncClient):
         self.logger = logger or get_logger("console")
         # HTTPx 参数自适应
         client_kwargs = {
-            key: value
-            for key, value in kwargs.items()
-            if key in signature(HttpxAsyncClient.__init__).parameters.keys()
+            key: value for key, value in kwargs.items() if key in signature(HttpxAsyncClient.__init__).parameters.keys()
         }
         client_config = get_default_client_config()
         client_config.update(client_kwargs)
@@ -410,13 +436,17 @@ class AsyncClient(HttpxAsyncClient):
         self.headers = self.client.headers
 
         # 重试 参数自适应
-        retry_kwargs = {
-            key: value
-            for key, value in kwargs.items()
-            if key in signature(retry).parameters.keys()
-        }
+        retry_kwargs = {key: value for key, value in kwargs.items() if key in signature(retry).parameters.keys()}
         self.retry_config = get_retry_config(**retry_kwargs)
+        # 对外请求日志的总开关，关闭后，设置report_log=False 也不会打印日志
         self.report_log = report_log
+        flyer_request_log = int(getenv("flyer_request_log", "1"))
+        if flyer_request_log == 0:
+            self.report_log = False
+
+        self.max_body_log_length = max_body_log_length
+        self.max_params_log_length = max_params_log_length
+        self.max_headers_log_length = max_headers_log_length
 
     async def get(self, url, params=None, **kwargs) -> Response:
         """
@@ -523,8 +553,7 @@ class AsyncClient(HttpxAsyncClient):
 
         return await self.request("delete", url, **kwargs)
 
-    async def request(self, method: str, url: str, *args,
-                      **kwargs) -> Response:
+    async def request(self, method: str, url: str, *args, **kwargs) -> Response:
         """发送请求
 
         Args:
@@ -561,28 +590,10 @@ class AsyncClient(HttpxAsyncClient):
             return await self.client.request(method.upper(), *args, **kwargs)
 
         request_start = time.perf_counter()
-        json_body = json.dumps(kwargs.get("json", {}))
-        data = str(kwargs.get("data") or "")
-        params = json.dumps(kwargs.get("params", {}))
         headers = {**self.headers, **kwargs.get("headers", {})}
         kwargs["headers"] = headers
         # 默认植入x-request-id
         kwargs["headers"].setdefault("x-request-id", str(uuid4()))
-
-        req_log = {
-            "direction": "out",
-            "logId": headers.get("x-request-id", str(uuid4())),
-            "response": {},
-            "request": {
-                "json": json_body[0:4096],
-                "data": data[0:4096],
-                "params": params[0:4096],
-                "url": url,
-                "method": method,
-                "headers": json.dumps(headers)
-            }
-        }
-
         response = Response(status_code=HTTP_200_OK)
         response._content = {}
 
@@ -603,27 +614,46 @@ class AsyncClient(HttpxAsyncClient):
             response._content = f"请求第三方服务异常, 错误信息：{err}".encode()
             response.status_code = HTTP_600_THIRD_PARTY_ERROR
 
-        finally:
-            req_log["response"]["status_code"] = response.status_code
-            req_log["response"]["headers"] = json.dumps(
-                dict(response.headers.items()))
+        if self.report_log:
+            req_body = kwargs.get("data", kwargs.get("json", "{}")) or ""
+            if isinstance(req_body, dict):
+                req_body = json.dumps(req_body, ensure_ascii=False)
+
+            req_log = {
+                "direction": "out",
+                "logId": headers.get("x-request-id", str(uuid4())),
+                "response": {},
+                "request": {
+                    "body": req_body[: self.max_body_log_length],
+                    "params": json.dumps(kwargs.get("params", {}), ensure_ascii=False)[: self.max_params_log_length],
+                    "url": url,
+                    "method": method.upper(),
+                    "headers": json.dumps(headers, ensure_ascii=False)[: self.max_headers_log_length],
+                },
+            }
+            req_log["response"]["status"] = response.status_code
+            req_log["response"]["headers"] = json.dumps(dict(response.headers), ensure_ascii=False)[
+                : self.max_headers_log_length
+            ]
             # 图片类型忽略内容记录
             content_type = response.headers.get("Content-Type", "")
             if not content_type.startswith("image") and content_type:
-                req_log["response"]["body"] = response.text[0:4096]
+                req_log["response"]["body"] = response.text[: self.max_body_log_length]
 
             request_end = time.perf_counter()
             req_log["latency"] = int((request_end - request_start) * 1000)
 
-        if self.report_log:
-            self.logger.info(json.dumps(req_log))
+            if response.status_code >= 400:
+                self.logger.warning(json.dumps(req_log, ensure_ascii=False))
+            else:
+                self.logger.info(json.dumps(req_log, ensure_ascii=False))
 
         return response
 
 
 if __name__ == "__main__":
     # 创建 request 实例
-    request_instance = Client(report_log=True)
+    request_instance = Client(report_log=True, logger=logger)
 
     # 发起 GET 请求示例
     GET = "https://httpbin.org/get"
@@ -645,7 +675,7 @@ if __name__ == "__main__":
 
     async def test_requests():
         # 创建 Requests 实例
-        requests_instance = AsyncClient(report_log=True)
+        requests_instance = AsyncClient(report_log=True, logger=logger)
 
         # # 发起 GET 请求示例
         # headers = {"User-Agent": "My User Agent"}
