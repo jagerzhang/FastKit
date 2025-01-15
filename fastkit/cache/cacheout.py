@@ -1,3 +1,4 @@
+from asyncio import iscoroutinefunction
 from functools import wraps
 from cacheout import Cache, FIFOCache, LIFOCache, LRUCache, MRUCache, LFUCache, RRCache
 
@@ -30,14 +31,31 @@ def cache_result_decorator(cache_instance):
         def wrapper(func):
 
             @wraps(func)
-            def inner(*args, **kwargs):
+            async def async_inner(*args, **kwargs):
                 cache_key = generate_cache_key(func, *args, **kwargs)
                 # 检查缓存
                 cached_result = cache_instance.get(cache_key)
                 if cached_result is not None:
                     return cached_result
 
-                # 调用原函数
+                # 调用原异步函数
+                result = await func(*args, **kwargs)
+
+                # 将结果存入缓存
+                if result is not None:
+                    cache_instance.set(cache_key, result, ttl)
+
+                return result
+
+            @wraps(func)
+            def sync_inner(*args, **kwargs):
+                cache_key = generate_cache_key(func, *args, **kwargs)
+                # 检查缓存
+                cached_result = cache_instance.get(cache_key)
+                if cached_result is not None:
+                    return cached_result
+
+                # 调用原同步函数
                 result = func(*args, **kwargs)
 
                 # 将结果存入缓存
@@ -46,7 +64,11 @@ def cache_result_decorator(cache_instance):
 
                 return result
 
-            return inner
+            # 根据函数类型返回相应的包装函数
+            if iscoroutinefunction(func):
+                return async_inner
+            else:
+                return sync_inner
 
         return wrapper
 
@@ -68,11 +90,7 @@ CACHE_TYPES = {
 
 
 def get_cacheout_pool(
-    cache_name: str = "default",
-    cache_type: str = "cache",
-    maxsize: int = 256,
-    ttl: int = 0,
-    **kwargs,
+    cache_name: str = "default", cache_type: str = "cache", maxsize: int = 256, ttl: int = 0, **kwargs
 ) -> Cache:
     """
     初始化本地内存缓存
