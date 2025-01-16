@@ -98,6 +98,7 @@ def get_retry_config(**kwargs):
             retry_if_result(retry_by_result),
             retry_if_exception_type(retry_by_except),
         ),
+        "reraise": True,
     }
     # 重试 参数自适应
     retry_kwargs = {key: value for key, value in kwargs.items() if key in signature(retry).parameters.keys()}
