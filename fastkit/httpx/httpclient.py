@@ -342,7 +342,7 @@ class Client(HttpxClient):
 
         # 记录日志
         if self.report_log:
-            req_body = kwargs.get("data", kwargs.get("json", "{}")) or ""
+            req_body = kwargs.get("data") or kwargs.get("json", "{}") or ""
             if isinstance(req_body, dict):
                 req_body = json.dumps(req_body, ensure_ascii=False)
 
@@ -616,7 +616,7 @@ class AsyncClient(HttpxAsyncClient):
             response.status_code = HTTP_600_THIRD_PARTY_ERROR
 
         if self.report_log:
-            req_body = kwargs.get("data", kwargs.get("json", "{}")) or ""
+            req_body = kwargs.get("data") or kwargs.get("json", "{}") or ""
             if isinstance(req_body, dict):
                 req_body = json.dumps(req_body, ensure_ascii=False)
 
