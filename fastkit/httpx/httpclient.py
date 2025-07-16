@@ -325,15 +325,21 @@ class Client(HttpxClient):
             response = _request(method, url, *args, **kwargs)
 
         except RetryError as err:
-            response._content = f"请求第三方服务异常, 经过多次重复仍然无法成功，错误信息：{err}".encode()
+            last_result = err.last_attempt.result() if hasattr(err.last_attempt, "result") else None
+            if last_result:
+                last_code = last_result.status_code
+                last_result = last_result.text
+                response._content = f"请求 {url} 异常，重试多次仍未成功, 最后一次请求状态码：{last_code}, 返回内容：{last_result}".encode()
+            else:
+                response._content = f"请求 {url} 异常，重试多次仍未成功, 错误信息：{err}".encode()
             response.status_code = HTTP_606_THIRD_PARTY_RETRY_ERROR
 
         except ConnectionResetError as err:
-            response._content = f"网络连接错误: {err}".encode()
+            response._content = f"请求 {url} 异常，网络连接错误: {err}".encode()
             response.status_code = HTTP_605_THIRD_PARTY_NEWORK_ERROR
 
         except Exception as err:  # pylint: disable=broad-except
-            response._content = f"请求第三方服务异常, 错误信息：{err}".encode()
+            response._content = f"请求 {url} 异常，错误信息：{err}".encode()
             response.status_code = HTTP_600_THIRD_PARTY_ERROR
 
         finally:
@@ -602,17 +608,21 @@ class AsyncClient(HttpxAsyncClient):
             response = await _request(method, url, *args, **kwargs)
 
         except RetryError as err:
-            if hasattr(err.last_attempt, "result"):
-                err = err.last_attempt.result()
-            response._content = f"请求第三方服务异常, 经过多次重复仍然无法成功，错误信息：{err}".encode()
+            last_result = err.last_attempt.result() if hasattr(err.last_attempt, "result") else None
+            if last_result:
+                last_code = last_result.status_code
+                last_result = last_result.text
+                response._content = f"请求 {url} 异常，重试多次仍未成功, 最后一次请求状态码：{last_code}, 返回内容：{last_result}".encode()
+            else:
+                response._content = f"请求 {url} 异常，重试多次仍未成功, 错误信息：{err}".encode()
             response.status_code = HTTP_606_THIRD_PARTY_RETRY_ERROR
 
         except ConnectionResetError as err:
-            response._content = f"网络连接错误: {err}".encode()
+            response._content = f"请求 {url} 异常，网络连接错误: {err}".encode()
             response.status_code = HTTP_605_THIRD_PARTY_NEWORK_ERROR
 
         except Exception as err:  # pylint: disable=broad-except
-            response._content = f"请求第三方服务异常, 错误信息：{err}".encode()
+            response._content = f"请求 {url} 异常，错误信息：{err}".encode()
             response.status_code = HTTP_600_THIRD_PARTY_ERROR
 
         if self.report_log:

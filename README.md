@@ -32,11 +32,3 @@ pip3 install fastkit
 | **数据存储**      | [fastkit/database](fastkit/database)    | 基于 `SQLAlchemy`和 `Dataset` 封装，同时提供`ORM`和`SQL`使用模式                  
 | **消息队列**      | [fastkit/message](fastkit/message)      | 对接`kafka`组件，提供生产者和消费者模型                      
 | **基础功能**      | [fastkit/utils](fastkit/utils)          | 提供字符串格式化等各种工具函数  
-
-
-## 开发规范&建议
-
-- 推荐插件或设置：
-    - 懒人三套：`Python`、`autoDocstring`、`yapf`，建议开启保存自动格式化代码设置
-    - 懒人进阶：安装`Copilot`插件，自动猜想代码
-
