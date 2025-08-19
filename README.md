@@ -1,5 +1,5 @@
 ## FastKit: FastFlyer 框架配套开发工具包
-![Verison](fastkit/static/Python-3.6.8+-icon.svg)
+![Verison](fastkit/static/Python-3.6.8+-icon.svg) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/jagerzhang/FastFlyer)
 
 ## 项目介绍
 FastKit 是 Python 开发工具包，集成了 增强 HTTP 请求、MySQL、Redis 等通用方法。
